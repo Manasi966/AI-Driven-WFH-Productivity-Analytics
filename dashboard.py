@@ -2,90 +2,43 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import base64
+import cv2
+import tempfile
 
 st.set_page_config(
-    page_title="WFH Productivity Analytics Platform",
+    page_title="WFH Productivity Analytics",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-USERS = {"admin": "admin123"}
-
-if "auth" not in st.session_state:
-    st.session_state.auth = False
-
 st.markdown("""
 <style>
 html, body, [data-testid="stAppViewContainer"] {
-    background: linear-gradient(135deg, #0f172a, #020617);
-    font-family: 'Inter', 'Segoe UI', system-ui;
+    background: linear-gradient(135deg, #020617, #020617);
+    color: #e5e7eb;
+    font-family: Inter, system-ui;
 }
 
-.login-wrapper {
+.login-box {
     max-width: 420px;
-    margin: 10vh auto 0 auto;
-    padding: 32px 36px 36px 36px;
-    background: rgba(255,255,255,0.06);
-    backdrop-filter: blur(18px);
-    border-radius: 20px;
-    border: 1px solid rgba(255,255,255,0.15);
-    box-shadow: 0 30px 80px rgba(0,0,0,0.65);
-    animation: fadeIn 0.9s ease;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(18px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.login-title {
-    font-size: 26px;
-    font-weight: 700;
-    color: #f8fafc;
-    text-align: center;
-    margin-bottom: 6px;
-}
-
-.login-sub {
-    font-size: 14px;
-    color: #94a3b8;
-    text-align: center;
-    margin-bottom: 26px;
-}
-
-input {
-    background-color: rgba(255,255,255,0.08) !important;
-    color: #f8fafc !important;
-    border-radius: 12px !important;
-    border: 1px solid rgba(255,255,255,0.25) !important;
-}
-
-label {
-    color: #cbd5f5 !important;
-    font-weight: 500;
+    margin: 15vh auto;
+    padding: 32px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 18px;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.6);
 }
 
 button[kind="primary"] {
-    width: 100%;
-    height: 44px;
+    background: linear-gradient(135deg,#3b82f6,#22c55e);
     border-radius: 12px;
-    background: linear-gradient(135deg, #3b82f6, #22c55e);
-    color: white;
-    font-weight: 600;
     border: none;
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
-}
-
-button[kind="primary"]:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 30px rgba(34,197,94,0.35);
 }
 
 .card {
     background: rgba(255,255,255,0.06);
-    border-radius: 20px;
     padding: 24px;
-    box-shadow: 0 18px 50px rgba(0,0,0,0.4);
+    border-radius: 18px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.45);
 }
 
 .card-title {
@@ -94,48 +47,38 @@ button[kind="primary"]:hover {
 }
 
 .card-value {
-    font-size: 36px;
+    font-size: 34px;
     font-weight: 800;
-    color: #3b82f6;
-}
-
-.footer {
-    text-align: center;
-    font-size: 13px;
-    color: #9ca3af;
-    margin-top: 50px;
+    color: #60a5fa;
 }
 </style>
 """, unsafe_allow_html=True)
 
+USERS = {"admin": "admin123"}
+
+if "auth" not in st.session_state:
+    st.session_state.auth = False
+
 def login_page():
-    st.markdown("""
-    <div class="login-wrapper">
-        <div class="login-title">Secure Access</div>
-        <div class="login-sub">Authentication required to access analytics</div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="login-box">', unsafe_allow_html=True)
+    st.markdown("### Secure Access")
+    st.markdown("Authentication required")
 
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
     if st.button("Login", type="primary"):
-        if username in USERS and USERS[username] == password:
+        if USERS.get(username) == password:
             st.session_state.auth = True
-            st.session_state.user = username
             st.rerun()
         else:
-            st.error("Invalid username or password")
+            st.error("Invalid credentials")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
 if not st.session_state.auth:
     login_page()
     st.stop()
-
-st.sidebar.write(f"Logged in as: {st.session_state.user}")
-if st.sidebar.button("Logout"):
-    st.session_state.auth = False
-    st.rerun()
 
 df = pd.read_csv("daily_report.csv", header=None)
 df.columns = ["Date", "Focus_Min", "Idle_Min", "Away_Min", "Productivity_%"]
@@ -148,7 +91,7 @@ st.markdown("AI-driven insights derived from computer vision and time-series ana
 
 c1, c2, c3, c4 = st.columns(4)
 
-def card_ui(title, value):
+def metric(title, value):
     return f"""
     <div class="card">
         <div class="card-title">{title}</div>
@@ -156,16 +99,67 @@ def card_ui(title, value):
     </div>
     """
 
-c1.markdown(card_ui("FOCUS TIME (MIN)", latest["Focus_Min"]), unsafe_allow_html=True)
-c2.markdown(card_ui("IDLE TIME (MIN)", latest["Idle_Min"]), unsafe_allow_html=True)
-c3.markdown(card_ui("AWAY TIME (MIN)", latest["Away_Min"]), unsafe_allow_html=True)
-c4.markdown(card_ui("PRODUCTIVITY SCORE", f'{latest["Productivity_%"]}%'), unsafe_allow_html=True)
+c1.markdown(metric("FOCUS TIME (MIN)", round(latest["Focus_Min"], 2)), unsafe_allow_html=True)
+c2.markdown(metric("IDLE TIME (MIN)", round(latest["Idle_Min"], 2)), unsafe_allow_html=True)
+c3.markdown(metric("AWAY TIME (MIN)", round(latest["Away_Min"], 2)), unsafe_allow_html=True)
+c4.markdown(metric("PRODUCTIVITY SCORE", f'{round(latest["Productivity_%"], 2)}%'), unsafe_allow_html=True)
 
 weekly = df.resample("W", on="Date").mean(numeric_only=True)
-fig1, ax1 = plt.subplots(figsize=(9,4))
-ax1.bar(weekly.index.strftime("%Y-%m-%d"), weekly["Productivity_%"], color="#3b82f6")
-ax1.set_ylim(0,100)
-st.pyplot(fig1)
+
+fig, ax = plt.subplots(figsize=(9, 4))
+ax.bar(weekly.index.strftime("%Y-%m-%d"), weekly["Productivity_%"], color="#3b82f6")
+ax.set_ylim(0, 100)
+ax.set_ylabel("Productivity (%)")
+ax.set_xlabel("Week")
+st.pyplot(fig)
+
+st.markdown("## Video-Based Productivity Analysis (Demo Mode)")
+
+uploaded_video = st.file_uploader(
+    "Upload a work session video (MP4)",
+    type=["mp4"]
+)
+
+if uploaded_video:
+    temp = tempfile.NamedTemporaryFile(delete=False)
+    temp.write(uploaded_video.read())
+
+    cap = cv2.VideoCapture(temp.name)
+    face_cascade = cv2.CascadeClassifier(
+        cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    )
+
+    total_frames = 0
+    focused_frames = 0
+    preview = None
+
+    with st.spinner("Analyzing video..."):
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            total_frames += 1
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+
+            if len(faces) > 0:
+                focused_frames += 1
+                if preview is None:
+                    preview = frame.copy()
+
+    cap.release()
+
+    focus_rate = round((focused_frames / total_frames) * 100, 2) if total_frames else 0
+
+    st.success("Video analysis completed")
+
+    m1, m2 = st.columns(2)
+    m1.metric("Total Frames", total_frames)
+    m2.metric("Focus Percentage", f"{focus_rate}%")
+
+    if preview is not None:
+        st.image(cv2.cvtColor(preview, cv2.COLOR_BGR2RGB), channels="RGB")
 
 csv = df.to_csv(index=False)
 b64 = base64.b64encode(csv.encode()).decode()
@@ -174,8 +168,9 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.markdown("""
-<div class="footer">
-Secure, access-controlled AI productivity analytics platform
-</div>
-""", unsafe_allow_html=True)
+st.markdown(
+    "<div style='text-align:center;color:#9ca3af;margin-top:40px;'>"
+    "Secure, privacy-preserving productivity analytics platform"
+    "</div>",
+    unsafe_allow_html=True
+)
